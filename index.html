@@ -53,8 +53,8 @@ label{display:block;margin:10px 0;font-size:13.5px;color:var(--mute)}
 input,select,textarea{display:block;width:100%;margin-top:4px;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .dbtn{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.dbtn .sp{flex:1}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:10px;font-size:14px;display:none;max-width:90vw}
-.mnav{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
-.mnav strong{font-size:18px;font-weight:600;min-width:150px;text-align:center}
+.mnav{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.mnav select{display:inline-block;width:auto;margin:0;padding:7px 10px;font-size:15px;font-weight:600}
 .mnav button:not(.link){width:38px;height:38px;padding:0;font-size:20px;line-height:1}
 .note{margin:8px 0 0;font-size:13.5px;color:var(--bad)}
 .note .link{color:var(--bad);padding:2px 4px}
@@ -86,15 +86,16 @@ const fromMi=i=>Math.floor(i/12)+'-'+pad(i%12+1);
 const shift=(m,k)=>fromMi(mi(m)+k);
 const mlabel=(m,short)=>{const[y,n]=m.split('-').map(Number);return new Date(y,n-1,1).toLocaleDateString(undefined,{month:short?'short':'long',year:'numeric'})};
 const dayIn=(m,day)=>{const[y,n]=m.split('-').map(Number);return m+'-'+pad(Math.min(day||1,new Date(y,n,0).getDate()))};
-const slot=(p,m)=>{const n=mi(m)-mi(p.start);return n>=0&&n%FREQ[p.freq].m===0};
-let S={cur:'€',accounts:[],providers:[],bills:[]},view='all',mon=today().slice(0,7),ready=false,ref=null,saveT;
+const slot=(p,m)=>{const n=mi(m)-mi(p.start);return n>=0&&n%FREQ[p.freq].m===0&&(!p.end||m<=p.end)};
+const amountFor=(p,m)=>{let a=p.amount;(p.changes||[]).slice().sort((x,y)=>x.from<y.from?-1:1).forEach(c=>{if(c.from<=m)a=c.amount});return a};
+let S={cur:'Ft',accounts:[],providers:[],bills:[]},view='all',mon=today().slice(0,7),ready=false,ref=null,saveT;
 
 function fd(s){const d=parse(s),o={day:'numeric',month:'short'};if(d.getFullYear()!==new Date().getFullYear())o.year='numeric';return d.toLocaleDateString(undefined,o)}
 function rel(s){const n=diff(s);return n===0?'today':n===1?'tomorrow':n===-1?'yesterday':n>0?'in '+n+' days':Math.abs(n)+' days ago'}
 const money=n=>(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'\u00a0'+S.cur;
 const accName=id=>(S.accounts.find(a=>a.id===id)||{}).name||'';
-function norm(x){x=Object.assign({cur:'€',accounts:[],providers:[],bills:[]},x);
-  x.providers.forEach(p=>{if(!p.start){const n=p.next||today();p.start=n.slice(0,7);p.day=p.anchor||parse(n).getDate()}p.day=p.day||1;if(!FREQ[p.freq])p.freq='monthly'});
+function norm(x){x=Object.assign({cur:'Ft',accounts:[],providers:[],bills:[]},x);
+  x.providers.forEach(p=>{if(!p.start){const n=p.next||today();p.start=n.slice(0,7);p.day=p.anchor||parse(n).getDate()}p.day=p.day||1;p.changes=p.changes||[];if(!FREQ[p.freq])p.freq='monthly'});
   x.bills.forEach(b=>{if(!b.month)b.month=(b.due||b.paid||today()).slice(0,7)});return x}
 
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3000)}
@@ -153,17 +154,19 @@ function provForm(p){const n=!p;
   openForm({title:n?'New provider':'Edit provider',fields:[
     {key:'name',label:'Provider',value:p.name},
     {key:'acc',label:'Account',type:'select',options:accOpts(),value:p.acc},
-    {key:'amount',label:'Usual amount',type:'number',value:p.amount},
+    ...(n?[{key:'amount',label:'Usual amount',type:'number',value:p.amount}]:[]),
     {key:'freq',label:'Invoice arrives',type:'select',options:freqOpts,value:p.freq},
     {key:'start',label:'First invoice month',type:'month',value:p.start},
     {key:'day',label:'Usually arrives on day of month',type:'int',value:p.day}],
-    extras:n?[]:[{label:'Delete',danger:true,fn:()=>{S.providers=S.providers.filter(x=>x.id!==p.id)}}]},v=>{
-    const o=n?{id:uid()}:p;Object.assign(o,{name:v.name,acc:v.acc,amount:parseFloat(v.amount)||0,freq:v.freq,start:v.start,day:Math.min(31,Math.max(1,parseInt(v.day)||1))});
-    if(n)S.providers.push(o);else S.bills.forEach(b=>{if(b.pid===o.id){b.name=o.name;b.acc=o.acc}})})}
+    extras:n?[]:[{label:'Change price (now '+money(amountFor(p,mon))+')',fn:()=>priceForm(p)},p.end?{label:'Reactivate',fn:()=>{delete p.end}}:{label:'End contract',fn:()=>endForm(p)},{label:'Delete entirely',danger:true,fn:()=>{S.providers=S.providers.filter(x=>x.id!==p.id)}}]},v=>{
+    const o=n?{id:uid()}:p;Object.assign(o,{name:v.name,acc:v.acc,freq:v.freq,start:v.start,day:Math.min(31,Math.max(1,parseInt(v.day)||1))});
+    if(n){o.amount=parseFloat(v.amount)||0;o.changes=[];S.providers.push(o)}else S.bills.forEach(b=>{if(b.pid===o.id){b.name=o.name;b.acc=o.acc}})})}
+function priceForm(p){openForm({title:'Price change: '+p.name,submit:'Save price change',fields:[{key:'amount',label:'New expected amount',type:'number',value:amountFor(p,mon)},{key:'from',label:'Applies from month (earlier months stay as they are)',type:'month',value:mon}]},v=>{p.changes=(p.changes||[]).filter(c=>c.from!==v.from);p.changes.push({from:v.from,amount:parseFloat(v.amount)||0})})}
+function endForm(p){openForm({title:'End contract: '+p.name,submit:'End contract',fields:[{key:'end',label:'Last invoice month (earlier months stay as they are)',type:'month',value:mon}]},v=>{p.end=v.end})}
 function addProvider(){if(!S.accounts.length){toast('Create an account first');return}provForm()}
 function record(id){const p=prov(id),m=mon;
   openForm({title:'Invoice received: '+p.name,submit:'Save as awaiting payment',fields:[
-    {key:'amount',label:'Actual amount',type:'number',value:p.amount},
+    {key:'amount',label:'Actual amount',type:'number',value:amountFor(p,m)},
     {key:'due',label:'Actual due date',type:'date',value:dayIn(m,p.day)}],
     extras:[{label:'Skip '+mlabel(m,1),fn:()=>{S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:'skipped',amount:0,due:dayIn(m,p.day),paid:null})}}]},v=>{
     S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:null})})}
@@ -186,13 +189,17 @@ function row(k,name,acc,meta,amt,est,btns){
 const btn=(a,id,l,pri)=>`<button class="${pri?'pri':''}" data-act="${a}" data-id="${id}">${l}</button>`;
 const sec=(t,n,items,emptyMsg)=>`<h2>${t} <span>${n}</span></h2>`+(items.length?`<ul>${items.join('')}</ul>`:`<p class="empty">${emptyMsg}</p>`);
 
+function monthPick(){const cy=+today().slice(0,4),[my,mm]=mon.split('-').map(Number),y0=Math.min(cy-10,my),y1=Math.max(cy+5,my);
+  let ms='',ys='';for(let i=1;i<=12;i++)ms+=`<option value="${i}"${i===mm?' selected':''}>${new Date(2000,i-1,1).toLocaleDateString(undefined,{month:'long'})}</option>`;
+  for(let y=y0;y<=y1;y++)ys+=`<option${y===my?' selected':''}>${y}</option>`;
+  return `<select id="pm" aria-label="Month">${ms}</select><select id="py" aria-label="Year">${ys}</select>`}
 function render(){
   $('#cur').value=S.cur;
   $('#tabs').innerHTML=[`<button aria-pressed="${view==='all'}" data-act="tab" data-id="all">All</button>`,...S.accounts.map(a=>`<button aria-pressed="${view===a.id}" data-act="tab" data-id="${a.id}">${esc(a.name)}</button>`),`<button data-act="adda">+ Account</button>`].join('');
   if(!ready)return;
   if(!S.accounts.length){$('#app').innerHTML=`<p class="empty">Start by creating an account to group your costs, for example “Personal” for phone and subscriptions and “Apartment” for rent and utilities. Then add the providers you expect invoices from.</p><div class="bar"><button class="pri" data-act="adda">Create first account</button><button data-act="imp">Import backup</button></div>`;return}
   const T=today(),cm=T.slice(0,7),{b:B,e:E}=items(mon);
-  const missing=E.filter(x=>x.date<T).map(x=>({d:x.date,h:row('bad',x.p.name,x.p.acc,`Invoice expected ${fd(x.date)} (${rel(x.date)}), not recorded yet`,x.p.amount,true,btn('rec',x.p.id,'Record invoice',1)+btn('pedit',x.p.id,'Edit'))}));
+  const missing=E.filter(x=>x.date<T).map(x=>({d:x.date,h:row('bad',x.p.name,x.p.acc,`Invoice expected ${fd(x.date)} (${rel(x.date)}), not recorded yet`,amountFor(x.p,mon),true,btn('rec',x.p.id,'Record invoice',1)+btn('pedit',x.p.id,'Edit'))}));
   const over=B.filter(b=>b.status==='awaiting'&&b.due<T).map(b=>({d:b.due,h:row('bad',b.name,b.acc,`Payment was due ${fd(b.due)} (${rel(b.due)})`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))}));
   const at=[...missing,...over].sort((a,b)=>a.d<b.d?-1:1).map(x=>x.h);
   const wait=B.filter(b=>b.status==='awaiting'&&b.due>=T).sort((a,b)=>a.due<b.due?-1:1);
@@ -202,14 +209,16 @@ function render(){
   const openAll=B.filter(b=>b.status==='awaiting'),openSum=openAll.reduce((s,b)=>s+b.amount,0),paidSum=paid.reduce((s,b)=>s+b.amount,0);
   let lo=cm;S.providers.forEach(p=>{if(p.start<lo)lo=p.start});S.bills.forEach(b=>{if(b.month<lo)lo=b.month});if(mi(lo)<mi(cm)-36)lo=shift(cm,-36);
   const others=[];for(let m=lo;mi(m)<=mi(cm);m=shift(m,1)){if(m!==mon){const n=attn(m);if(n)others.push(`<button class="link" data-act="goto" data-id="${m}">${mlabel(m,1)} (${n})</button>`)}}
-  let h=`<div class="mnav"><button data-act="prev" aria-label="Previous month">‹</button><strong>${mlabel(mon)}</strong><button data-act="next" aria-label="Next month">›</button>${mon!==cm?'<button class="link" data-act="now">This month</button>':''}</div>`;
+  let h=`<div class="mnav"><button data-act="prev" aria-label="Previous month">‹</button>${monthPick()}<button data-act="next" aria-label="Next month">›</button>${mon!==cm?'<button class="link" data-act="now">This month</button>':''}</div>`;
   if(others.length)h+=`<p class="note">Still needs attention in: ${others.join(' ')}</p>`;
   h+=`<div class="sum"><div class="bad"><b>${at.length}</b><small>need attention</small></div><div class="wait"><b>${money(openSum)}</b><small>awaiting payment (${openAll.length})</small></div><div class="ok"><b>${money(paidSum)}</b><small>paid (${paid.length})</small></div></div>`;
   h+=sec('Needs attention',at.length,at,'Nothing missing or overdue.');
   h+=sec('Awaiting payment',wait.length,wait.map(b=>row('wait',b.name,b.acc,`Due ${fd(b.due)} (${rel(b.due)})`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))),'No open invoices.');
-  h+=sec('Expected',exp.length,exp.map(x=>row('idle',x.p.name,x.p.acc,`Expected ${fd(x.date)} (${rel(x.date)}) · ${FREQ[x.p.freq].l.toLowerCase()}`,x.p.amount,true,btn('rec',x.p.id,'Record invoice')+btn('pedit',x.p.id,'Edit'))),'Nothing else expected this month.');
+  h+=sec('Expected',exp.length,exp.map(x=>row('idle',x.p.name,x.p.acc,`Expected ${fd(x.date)} (${rel(x.date)}) · ${FREQ[x.p.freq].l.toLowerCase()}${x.p.end?' · last invoice '+mlabel(x.p.end,1):''}`,amountFor(x.p,mon),true,btn('rec',x.p.id,'Record invoice')+btn('pedit',x.p.id,'Edit'))),'Nothing else expected this month.');
   h+=sec('Paid',paid.length,paid.map(b=>row('ok',b.name,b.acc,`Paid ${fd(b.paid)} · was due ${fd(b.due)}`,b.amount,false,btn('bedit',b.id,'Edit'))),'Nothing paid yet.');
   if(skip.length)h+=sec('Skipped',skip.length,skip.map(b=>row('idle',b.name,b.acc,'No invoice this month',null,false,btn('unskip',b.id,'Undo'))),'');
+  const ended=S.providers.filter(p=>p.end&&p.end<cm&&(view==='all'||p.acc===view));
+  if(ended.length)h+=sec('Ended contracts',ended.length,ended.map(p=>row('idle',p.name,p.acc,'Last invoice '+mlabel(p.end),null,false,btn('pedit',p.id,'Edit'))),'');
   h+=`<div class="bar"><button class="pri" data-act="addp">+ Provider</button>${view!=='all'?'<button class="link" data-act="edita">Rename or delete this account</button>':''}</div>`;
   $('#app').innerHTML=h;
 }
@@ -217,7 +226,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
   ({tab:()=>{view=id;render()},adda:addAccount,edita:editAccount,addp:addProvider,rec:()=>record(id),pedit:()=>provForm(prov(id)),pay:()=>pay(id),bedit:()=>editBill(id),
     prev:()=>{mon=shift(mon,-1);render()},next:()=>{mon=shift(mon,1);render()},now:()=>{mon=today().slice(0,7);render()},goto:()=>{mon=id;render()},
     unskip:()=>{S.bills=S.bills.filter(x=>x.id!==id);save();render()},exj:exportJson,exc:exportCsv,imp:importDlg})[b.dataset.act]()});
-$('#cur').addEventListener('change',e=>{S.cur=e.target.value.trim()||'€';save();render()});
+$('#cur').addEventListener('change',e=>{S.cur=e.target.value.trim()||'Ft';save();render()});
+document.addEventListener('change',e=>{if(e.target.id==='pm'||e.target.id==='py'){mon=$('#py').value+'-'+pad($('#pm').value);render()}});
 
 /* ---------- load ---------- */
 async function init(){
@@ -230,7 +240,7 @@ async function init(){
   }catch(e){ref=null}
   if(ref){try{const s=await Promise.race([ref.get(),new Promise((_,r)=>setTimeout(r,10000))]);if(s.exists&&s.data().json)loaded=JSON.parse(s.data().json)}catch(e){ref=null}}
   if(!ref){try{const t=localStorage.getItem('oh-tracker');if(t)loaded=JSON.parse(t)}catch(e){}}
-  if(loaded&&Array.isArray(loaded.accounts))S=norm(loaded);
+  if(loaded&&Array.isArray(loaded.accounts)){S=norm(loaded);if(S.cur==='€')S.cur='Ft'}
   setSt(ref?'Saved to your account':'Saved on this device only');
   ready=true;render();
 }
