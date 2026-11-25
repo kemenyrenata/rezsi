@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Overhead tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF1F5;--card:#fff;--ink:#18212B;--mute:#5B6877;--line:#D8DEE6;--acc:#0F5F73;--accink:#fff;--bad:#B3261E;--badbg:#FBEAE8;--wait:#9A6200;--ok:#2E7D4F;--idle:#8A97A6;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12181F;--card:#1B242E;--ink:#E7ECF2;--mute:#9AA7B6;--line:#2C3743;--acc:#4FB3CC;--accink:#0B1820;--bad:#FF8A80;--badbg:#3A1F1E;--wait:#E8B04A;--ok:#6FCF97;--idle:#6F7C8B;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12181F;--card:#1B242E;--ink:#E7ECF2;--mute:#9AA7B6;--line:#2C3743;--acc:#4FB3CC;--accink:#0B1820;--bad:#FF8A80;--badbg:#3A1F1E;--wait:#E8B04A;--ok:#6FCF97;--idle:#6F7C8B;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 "IBM Plex Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:720px;margin:0 auto;padding:18px 14px 40px}
+h1{font-size:22px;font-weight:600;margin:4px 0 14px;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600;margin:24px 0 8px;color:var(--ink)}
+h2 span{color:var(--mute);font-weight:400}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 12px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.pri{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:500}
+button.link{border:0;background:none;color:var(--mute);padding:7px 4px;text-decoration:underline}
+button.danger{color:var(--bad)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.tabs button{white-space:nowrap;border-radius:99px}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);margin:14px 0 4px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.sum div{padding:12px;border-left:1px solid var(--line)}
+.sum div:first-child{border-left:0}
+.sum b{display:block;font-size:20px;font-weight:600;line-height:1.2}
+.sum small{color:var(--mute);font-size:12.5px}
+.sum .bad b{color:var(--bad)}.sum .wait b{color:var(--wait)}.sum .ok b{color:var(--ok)}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.row{display:flex;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--idle);border-radius:10px;padding:10px 12px}
+.row.bad{border-left-color:var(--bad);background:linear-gradient(var(--badbg),var(--badbg)) ,var(--card)}
+.row.wait{border-left-color:var(--wait)}.row.ok{border-left-color:var(--ok)}
+.main{min-width:0}.main b{font-weight:600}
+.acc{margin-left:8px;font-size:12px;color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+.meta{color:var(--mute);font-size:13.5px}
+.row.bad .meta{color:var(--bad)}
+.side{text-align:right;flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.amt{font-weight:600}.amt small{font-weight:400;color:var(--mute)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.btns button{padding:5px 10px;font-size:13.5px}
+.empty{color:var(--mute);padding:6px 2px}
+.foot{margin-top:28px;display:flex;justify-content:space-between;align-items:center;color:var(--mute);font-size:13px;gap:10px;flex-wrap:wrap}
+.bar{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:18px;width:min(92vw,420px)}
+dialog::backdrop{background:rgba(10,15,20,.5)}
+dialog h3{margin:0 0 12px;font-size:17px}
+label{display:block;margin:10px 0;font-size:13.5px;color:var(--mute)}
+input,select,textarea{display:block;width:100%;margin-top:4px;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.dbtn{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.dbtn .sp{flex:1}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:10px;font-size:14px;display:none;max-width:90vw}
+.mnav{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
+.mnav strong{font-size:18px;font-weight:600;min-width:150px;text-align:center}
+.mnav button:not(.link){width:38px;height:38px;padding:0;font-size:20px;line-height:1}
+.note{margin:8px 0 0;font-size:13.5px;color:var(--bad)}
+.note .link{color:var(--bad);padding:2px 4px}
+textarea{resize:vertical}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Overhead tracker</h1>
+  <div class="tabs" id="tabs"></div>
+  <div id="app"><p class="empty">Loading…</p></div>
+  <div class="foot"><span id="st"></span><label style="margin:0;display:flex;align-items:center;gap:8px">Currency <input id="cur" style="width:70px;margin:0;padding:4px 8px" maxlength="4"></label></div>
+  <div class="bar"><button data-act="exj">Export backup</button><button data-act="exc">Export CSV</button><button data-act="imp">Import backup</button></div>
+</div>
+<dialog id="dlg"><form id="frm"></form></dialog>
+<div id="toast" role="status"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const pad=n=>String(n).padStart(2,'0');
+const FREQ={monthly:{l:'Every month',m:1},bimonthly:{l:'Every 2 months',m:2},quarterly:{l:'Every 3 months',m:3},half:{l:'Every 6 months',m:6},yearly:{l:'Once a year',m:12}};
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const today=()=>iso(new Date());
+const diff=s=>Math.round((parse(s)-parse(today()))/864e5);
+const mi=m=>{const[y,n]=m.split('-').map(Number);return y*12+n-1};
+const fromMi=i=>Math.floor(i/12)+'-'+pad(i%12+1);
+const shift=(m,k)=>fromMi(mi(m)+k);
+const mlabel=(m,short)=>{const[y,n]=m.split('-').map(Number);return new Date(y,n-1,1).toLocaleDateString(undefined,{month:short?'short':'long',year:'numeric'})};
+const dayIn=(m,day)=>{const[y,n]=m.split('-').map(Number);return m+'-'+pad(Math.min(day||1,new Date(y,n,0).getDate()))};
+const slot=(p,m)=>{const n=mi(m)-mi(p.start);return n>=0&&n%FREQ[p.freq].m===0};
+let S={cur:'€',accounts:[],providers:[],bills:[]},view='all',mon=today().slice(0,7),ready=false,ref=null,saveT;
+
+function fd(s){const d=parse(s),o={day:'numeric',month:'short'};if(d.getFullYear()!==new Date().getFullYear())o.year='numeric';return d.toLocaleDateString(undefined,o)}
+function rel(s){const n=diff(s);return n===0?'today':n===1?'tomorrow':n===-1?'yesterday':n>0?'in '+n+' days':Math.abs(n)+' days ago'}
+const money=n=>(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'\u00a0'+S.cur;
+const accName=id=>(S.accounts.find(a=>a.id===id)||{}).name||'';
+function norm(x){x=Object.assign({cur:'€',accounts:[],providers:[],bills:[]},x);
+  x.providers.forEach(p=>{if(!p.start){const n=p.next||today();p.start=n.slice(0,7);p.day=p.anchor||parse(n).getDate()}p.day=p.day||1;if(!FREQ[p.freq])p.freq='monthly'});
+  x.bills.forEach(b=>{if(!b.month)b.month=(b.due||b.paid||today()).slice(0,7)});return x}
+
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3000)}
+function setSt(t){$('#st').textContent=t}
+function save(){setSt('Saving…');clearTimeout(saveT);saveT=setTimeout(persist,400)}
+async function persist(){const json=JSON.stringify(S);
+  if(ref){try{await ref.set({json});setSt('Saved to your account')}catch(e){setSt('Couldn’t save. Check your connection and change something to retry.')}return}
+  try{localStorage.setItem('oh-tracker',json);setSt('Saved on this device only')}catch(e){setSt('Not saved: storage is unavailable here')}}
+
+/* ---------- dialogs ---------- */
+const closeBtn=ev=>{if(ev.target.closest('[data-x="cancel"]'))$('#dlg').close()};
+function openForm(o,onSubmit){
+  const f=$('#frm');
+  f.innerHTML=`<h3>${esc(o.title)}</h3>`+o.fields.map(x=>{
+    const v=x.value==null?'':x.value;
+    if(x.type==='select')return `<label>${esc(x.label)}<select name="${x.key}">${x.options.map(op=>`<option value="${esc(op.v)}"${op.v===v?' selected':''}>${esc(op.l)}</option>`).join('')}</select></label>`;
+    const t=x.type==='int'?'number':x.type||'text',a=x.type==='number'?' step="0.01" min="0" inputmode="decimal"':x.type==='int'?' step="1" min="1" max="31" inputmode="numeric"':'';
+    return `<label>${esc(x.label)}<input name="${x.key}" type="${t}" value="${esc(v)}"${a} required></label>`}).join('')
+   +`<div class="dbtn"><button type="button" data-x="cancel">Cancel</button>`+(o.extras||[]).map((e,i)=>`<button type="button" class="${e.danger?'danger':''}" data-x="${i}">${esc(e.label)}</button>`).join('')+`<span class="sp"></span><button class="pri" type="submit">${esc(o.submit||'Save')}</button></div>`;
+  f.onsubmit=ev=>{ev.preventDefault();const d=new FormData(f),v={};o.fields.forEach(x=>v[x.key]=(d.get(x.key)||'').toString().trim());$('#dlg').close();onSubmit(v);save();render()};
+  f.onclick=ev=>{const b=ev.target.closest('button[data-x]');if(!b)return;$('#dlg').close();if(b.dataset.x!=='cancel'){o.extras[+b.dataset.x].fn();save();render()}};
+  $('#dlg').showModal();
+}
+function showText(title,text){const f=$('#frm');
+  f.innerHTML=`<h3>${esc(title)}</h3><label>Downloads aren’t available here. Select all, copy this text and keep it somewhere safe.<textarea rows="8" readonly>${esc(text)}</textarea></label><div class="dbtn"><span class="sp"></span><button type="button" class="pri" data-x="cancel">Close</button></div>`;
+  f.onsubmit=e=>e.preventDefault();f.onclick=closeBtn;$('#dlg').showModal()}
+async function download(filename,text,title){
+  let d=null;try{d=window.claude&&await claude.use('downloads')}catch(e){}
+  if(!d){showText(title,text);return}
+  try{await d.save({filename,data:text})}catch(e){if(e&&(e.code==='unavailable'||e.code==='host_unavailable'))showText(title,text);else toast('Download didn’t complete')}}
+const csvc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+function exportJson(){download('overhead-tracker-'+today()+'.json',JSON.stringify({app:'overhead-tracker',version:2,exported:today(),state:S},null,2),'Backup')}
+function exportCsv(){const r=[['month','account','provider','status','amount','due date','paid date'],...S.bills.slice().sort((a,b)=>a.month<b.month?-1:a.month>b.month?1:0).map(b=>[b.month,accName(b.acc),b.name,b.status,b.amount,b.due||'',b.paid||''])];
+  download('overhead-bills-'+today()+'.csv','\ufeff'+r.map(x=>x.map(csvc).join(',')).join('\r\n'),'Bills (CSV)')}
+function importDlg(){const f=$('#frm');
+  f.innerHTML=`<h3>Import backup</h3><label>Backup file (.json)<input type="file" id="imf" accept=".json,application/json"></label><label>Or paste the backup text<textarea rows="4" id="imt"></textarea></label><p class="meta">Importing replaces everything currently in the tracker.</p><div class="dbtn"><button type="button" data-x="cancel">Cancel</button><span class="sp"></span><button class="pri" type="submit">Replace with import</button></div>`;
+  f.onclick=closeBtn;
+  f.onsubmit=async ev=>{ev.preventDefault();
+    try{const file=$('#imf').files[0];const txt=file?await file.text():$('#imt').value;const j=JSON.parse(txt);const st=j&&j.state?j.state:j;
+      if(!st||!Array.isArray(st.accounts)||!Array.isArray(st.providers)||!Array.isArray(st.bills))throw 0;
+      S=norm(st);view='all';mon=today().slice(0,7);$('#dlg').close();save();render();toast('Imported')}
+    catch(e){toast('That doesn’t look like a tracker backup')}};
+  $('#dlg').showModal()}
+
+/* ---------- actions ---------- */
+const prov=id=>S.providers.find(p=>p.id===id), bill=id=>S.bills.find(b=>b.id===id);
+const freqOpts=Object.entries(FREQ).map(([v,x])=>({v,l:x.l}));
+const accOpts=()=>S.accounts.map(a=>({v:a.id,l:a.name}));
+function addAccount(){openForm({title:'New account',fields:[{key:'name',label:'Name (for example Personal or Apartment)'}]},v=>{const a={id:uid(),name:v.name};S.accounts.push(a);view=a.id})}
+function editAccount(){const a=S.accounts.find(x=>x.id===view);if(!a)return;
+  openForm({title:'Edit account',fields:[{key:'name',label:'Name',value:a.name}],extras:[{label:'Delete',danger:true,fn:()=>{
+    if(S.providers.some(p=>p.acc===a.id)){toast('Delete or move this account’s providers first');return}
+    S.accounts=S.accounts.filter(x=>x.id!==a.id);view='all'}}]},v=>{a.name=v.name;S.bills.forEach(b=>{})})}
+function provForm(p){const n=!p;
+  p=p||{name:'',acc:view!=='all'?view:(S.accounts[0]||{}).id,amount:'',freq:'monthly',start:mon,day:1};
+  openForm({title:n?'New provider':'Edit provider',fields:[
+    {key:'name',label:'Provider',value:p.name},
+    {key:'acc',label:'Account',type:'select',options:accOpts(),value:p.acc},
+    {key:'amount',label:'Usual amount',type:'number',value:p.amount},
+    {key:'freq',label:'Invoice arrives',type:'select',options:freqOpts,value:p.freq},
+    {key:'start',label:'First invoice month',type:'month',value:p.start},
+    {key:'day',label:'Usually arrives on day of month',type:'int',value:p.day}],
+    extras:n?[]:[{label:'Delete',danger:true,fn:()=>{S.providers=S.providers.filter(x=>x.id!==p.id)}}]},v=>{
+    const o=n?{id:uid()}:p;Object.assign(o,{name:v.name,acc:v.acc,amount:parseFloat(v.amount)||0,freq:v.freq,start:v.start,day:Math.min(31,Math.max(1,parseInt(v.day)||1))});
+    if(n)S.providers.push(o);else S.bills.forEach(b=>{if(b.pid===o.id){b.name=o.name;b.acc=o.acc}})})}
+function addProvider(){if(!S.accounts.length){toast('Create an account first');return}provForm()}
+function record(id){const p=prov(id),m=mon;
+  openForm({title:'Invoice received: '+p.name,submit:'Save as awaiting payment',fields:[
+    {key:'amount',label:'Actual amount',type:'number',value:p.amount},
+    {key:'due',label:'Actual due date',type:'date',value:dayIn(m,p.day)}],
+    extras:[{label:'Skip '+mlabel(m,1),fn:()=>{S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:'skipped',amount:0,due:dayIn(m,p.day),paid:null})}}]},v=>{
+    S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:null})})}
+function pay(id){const b=bill(id);
+  openForm({title:'Paid: '+b.name,submit:'Mark as paid',fields:[{key:'paid',label:'Paid on',type:'date',value:today()}]},v=>{b.status='paid';b.paid=v.paid})}
+function editBill(id){const b=bill(id),paid=b.status==='paid';
+  const fields=[{key:'amount',label:'Amount',type:'number',value:b.amount},{key:'due',label:'Due date',type:'date',value:b.due},{key:'month',label:'Belongs to month',type:'month',value:b.month}];
+  if(paid)fields.push({key:'paid',label:'Paid on',type:'date',value:b.paid});
+  const extras=[{label:'Delete',danger:true,fn:()=>{S.bills=S.bills.filter(x=>x.id!==b.id)}}];
+  if(paid)extras.unshift({label:'Back to awaiting',fn:()=>{b.status='awaiting';b.paid=null}});
+  openForm({title:b.name+' · '+mlabel(b.month,1),fields,extras},v=>{b.amount=parseFloat(v.amount)||0;b.due=v.due;b.month=v.month;if(paid)b.paid=v.paid})}
+
+/* ---------- render ---------- */
+function items(m){const inV=a=>view==='all'||a===view;
+  return{b:S.bills.filter(x=>x.month===m&&inV(x.acc)),
+    e:S.providers.filter(p=>inV(p.acc)&&slot(p,m)&&!S.bills.some(x=>x.pid===p.id&&x.month===m)).map(p=>({p,date:dayIn(m,p.day)}))}}
+function attn(m){const T=today(),{b,e}=items(m);return e.filter(x=>x.date<T).length+b.filter(x=>x.status==='awaiting'&&x.due<T).length}
+function row(k,name,acc,meta,amt,est,btns){
+  return `<li class="row ${k}"><div class="main"><b>${esc(name)}</b>${view==='all'&&acc?`<span class="acc">${esc(accName(acc))}</span>`:''}<div class="meta">${meta}</div></div><div class="side"><div class="amt">${amt==null?'':money(amt)}${est?'<small> est.</small>':''}</div><div class="btns">${btns}</div></div></li>`}
+const btn=(a,id,l,pri)=>`<button class="${pri?'pri':''}" data-act="${a}" data-id="${id}">${l}</button>`;
+const sec=(t,n,items,emptyMsg)=>`<h2>${t} <span>${n}</span></h2>`+(items.length?`<ul>${items.join('')}</ul>`:`<p class="empty">${emptyMsg}</p>`);
+
+function render(){
+  $('#cur').value=S.cur;
+  $('#tabs').innerHTML=[`<button aria-pressed="${view==='all'}" data-act="tab" data-id="all">All</button>`,...S.accounts.map(a=>`<button aria-pressed="${view===a.id}" data-act="tab" data-id="${a.id}">${esc(a.name)}</button>`),`<button data-act="adda">+ Account</button>`].join('');
+  if(!ready)return;
+  if(!S.accounts.length){$('#app').innerHTML=`<p class="empty">Start by creating an account to group your costs, for example “Personal” for phone and subscriptions and “Apartment” for rent and utilities. Then add the providers you expect invoices from.</p><div class="bar"><button class="pri" data-act="adda">Create first account</button><button data-act="imp">Import backup</button></div>`;return}
+  const T=today(),cm=T.slice(0,7),{b:B,e:E}=items(mon);
+  const missing=E.filter(x=>x.date<T).map(x=>({d:x.date,h:row('bad',x.p.name,x.p.acc,`Invoice expected ${fd(x.date)} (${rel(x.date)}), not recorded yet`,x.p.amount,true,btn('rec',x.p.id,'Record invoice',1)+btn('pedit',x.p.id,'Edit'))}));
+  const over=B.filter(b=>b.status==='awaiting'&&b.due<T).map(b=>({d:b.due,h:row('bad',b.name,b.acc,`Payment was due ${fd(b.due)} (${rel(b.due)})`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))}));
+  const at=[...missing,...over].sort((a,b)=>a.d<b.d?-1:1).map(x=>x.h);
+  const wait=B.filter(b=>b.status==='awaiting'&&b.due>=T).sort((a,b)=>a.due<b.due?-1:1);
+  const exp=E.filter(x=>x.date>=T).sort((a,b)=>a.date<b.date?-1:1);
+  const paid=B.filter(b=>b.status==='paid').sort((a,b)=>a.paid<b.paid?1:-1);
+  const skip=B.filter(b=>b.status==='skipped');
+  const openAll=B.filter(b=>b.status==='awaiting'),openSum=openAll.reduce((s,b)=>s+b.amount,0),paidSum=paid.reduce((s,b)=>s+b.amount,0);
+  let lo=cm;S.providers.forEach(p=>{if(p.start<lo)lo=p.start});S.bills.forEach(b=>{if(b.month<lo)lo=b.month});if(mi(lo)<mi(cm)-36)lo=shift(cm,-36);
+  const others=[];for(let m=lo;mi(m)<=mi(cm);m=shift(m,1)){if(m!==mon){const n=attn(m);if(n)others.push(`<button class="link" data-act="goto" data-id="${m}">${mlabel(m,1)} (${n})</button>`)}}
+  let h=`<div class="mnav"><button data-act="prev" aria-label="Previous month">‹</button><strong>${mlabel(mon)}</strong><button data-act="next" aria-label="Next month">›</button>${mon!==cm?'<button class="link" data-act="now">This month</button>':''}</div>`;
+  if(others.length)h+=`<p class="note">Still needs attention in: ${others.join(' ')}</p>`;
+  h+=`<div class="sum"><div class="bad"><b>${at.length}</b><small>need attention</small></div><div class="wait"><b>${money(openSum)}</b><small>awaiting payment (${openAll.length})</small></div><div class="ok"><b>${money(paidSum)}</b><small>paid (${paid.length})</small></div></div>`;
+  h+=sec('Needs attention',at.length,at,'Nothing missing or overdue.');
+  h+=sec('Awaiting payment',wait.length,wait.map(b=>row('wait',b.name,b.acc,`Due ${fd(b.due)} (${rel(b.due)})`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))),'No open invoices.');
+  h+=sec('Expected',exp.length,exp.map(x=>row('idle',x.p.name,x.p.acc,`Expected ${fd(x.date)} (${rel(x.date)}) · ${FREQ[x.p.freq].l.toLowerCase()}`,x.p.amount,true,btn('rec',x.p.id,'Record invoice')+btn('pedit',x.p.id,'Edit'))),'Nothing else expected this month.');
+  h+=sec('Paid',paid.length,paid.map(b=>row('ok',b.name,b.acc,`Paid ${fd(b.paid)} · was due ${fd(b.due)}`,b.amount,false,btn('bedit',b.id,'Edit'))),'Nothing paid yet.');
+  if(skip.length)h+=sec('Skipped',skip.length,skip.map(b=>row('idle',b.name,b.acc,'No invoice this month',null,false,btn('unskip',b.id,'Undo'))),'');
+  h+=`<div class="bar"><button class="pri" data-act="addp">+ Provider</button>${view!=='all'?'<button class="link" data-act="edita">Rename or delete this account</button>':''}</div>`;
+  $('#app').innerHTML=h;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id;
+  ({tab:()=>{view=id;render()},adda:addAccount,edita:editAccount,addp:addProvider,rec:()=>record(id),pedit:()=>provForm(prov(id)),pay:()=>pay(id),bedit:()=>editBill(id),
+    prev:()=>{mon=shift(mon,-1);render()},next:()=>{mon=shift(mon,1);render()},now:()=>{mon=today().slice(0,7);render()},goto:()=>{mon=id;render()},
+    unskip:()=>{S.bills=S.bills.filter(x=>x.id!==id);save();render()},exj:exportJson,exc:exportCsv,imp:importDlg})[b.dataset.act]()});
+$('#cur').addEventListener('change',e=>{S.cur=e.target.value.trim()||'€';save();render()});
+
+/* ---------- load ---------- */
+async function init(){
+  render();let loaded=null;
+  try{
+    if(window.claude&&claude.use){
+      const db=await claude.use('db'),user=await claude.use('user');
+      if(db&&user){const id=await user.id();if(id)ref=db.doc('data/users/'+id+'/tracker/main')}
+    }
+  }catch(e){ref=null}
+  if(ref){try{const s=await Promise.race([ref.get(),new Promise((_,r)=>setTimeout(r,10000))]);if(s.exists&&s.data().json)loaded=JSON.parse(s.data().json)}catch(e){ref=null}}
+  if(!ref){try{const t=localStorage.getItem('oh-tracker');if(t)loaded=JSON.parse(t)}catch(e){}}
+  if(loaded&&Array.isArray(loaded.accounts))S=norm(loaded);
+  setSt(ref?'Saved to your account':'Saved on this device only');
+  ready=true;render();
+}
+init();
+</script>
+</body>
+</html>
