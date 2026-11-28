@@ -185,6 +185,14 @@ function provForm(p){const n=!p;
 function priceForm(p){openForm({title:'Price change: '+p.name,submit:'Save price change',fields:[{key:'amount',label:'New expected amount',type:'number',value:amountFor(p,mon)},{key:'from',label:'Applies from month (earlier months stay as they are)',type:'month',value:mon}]},v=>{p.changes=(p.changes||[]).filter(c=>c.from!==v.from);p.changes.push({from:v.from,amount:parseFloat(v.amount)||0})})}
 function endForm(p){openForm({title:'End contract: '+p.name,submit:'End contract',fields:[{key:'end',label:'Last invoice month (earlier months stay as they are)',type:'month',value:mon}]},v=>{p.end=v.end})}
 function addProvider(){if(!S.accounts.length){toast('Create an account first');return}provForm()}
+function adhoc(){if(!S.accounts.length){toast('Create an account first');return}
+  openForm({title:'One-off invoice',submit:'Save as awaiting payment',fields:[
+    {key:'name',label:'Description or provider'},
+    {key:'acc',label:'Account',type:'select',options:accOpts(),value:view!=='all'?view:S.accounts[0].id},
+    {key:'amount',label:'Amount',type:'number',value:''},
+    {key:'due',label:'Due date',type:'date',value:dayIn(mon,parseInt(today().slice(8)))},
+    {key:'month',label:'Belongs to month',type:'month',value:mon}]},v=>{
+    S.bills.push({id:uid(),pid:null,adhoc:true,name:v.name,acc:v.acc,month:v.month,status:'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:null});mon=v.month})}
 function record(id){const p=prov(id),m=mon;
   openForm({title:'Invoice received: '+p.name,submit:'Save as awaiting payment',fields:[
     {key:'amount',label:'Actual amount',type:'number',value:amountFor(p,m)},
@@ -221,7 +229,7 @@ function render(){
   if(!S.accounts.length){$('#app').innerHTML=`<p class="empty">Start by creating an account to group your costs, for example “Personal” for phone and subscriptions and “Apartment” for rent and utilities. Then add the providers you expect invoices from.</p><div class="bar"><button class="pri" data-act="adda">Create first account</button><button data-act="imp">Import backup</button></div>`;return}
   const T=today(),cm=T.slice(0,7),{b:B,e:E}=items(mon);
   const missing=E.filter(x=>x.date<T).map(x=>({d:x.date,h:row('bad',x.p.name,x.p.acc,`Invoice expected ${fd(x.date)} (${rel(x.date)}), not recorded yet`,amountFor(x.p,mon),true,btn('rec',x.p.id,'Record invoice',1)+btn('pedit',x.p.id,'Edit'))}));
-  const over=B.filter(b=>b.status==='awaiting'&&b.due<T).map(b=>({d:b.due,h:row('bad',b.name,b.acc,`Payment was due ${fd(b.due)} (${rel(b.due)})`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))}));
+  const over=B.filter(b=>b.status==='awaiting'&&b.due<T).map(b=>({d:b.due,h:row('bad',b.name,b.acc,`Payment was due ${fd(b.due)} (${rel(b.due)})${b.adhoc?' · one-off':''}`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))}));
   const at=[...missing,...over].sort((a,b)=>a.d<b.d?-1:1).map(x=>x.h);
   const wait=B.filter(b=>b.status==='awaiting'&&b.due>=T).sort((a,b)=>a.due<b.due?-1:1);
   const exp=E.filter(x=>x.date>=T).sort((a,b)=>a.date<b.date?-1:1);
@@ -234,17 +242,17 @@ function render(){
   if(others.length)h+=`<p class="note">Still needs attention in: ${others.join(' ')}</p>`;
   h+=`<div class="sum"><div class="bad"><b>${at.length}</b><small>need attention</small></div><div class="wait"><b>${money(openSum)}</b><small>awaiting payment (${openAll.length})</small></div><div class="ok"><b>${money(paidSum)}</b><small>paid (${paid.length})</small></div></div>`;
   h+=sec('Needs attention',at.length,at,'Nothing missing or overdue.');
-  h+=sec('Awaiting payment',wait.length,wait.map(b=>row('wait',b.name,b.acc,`Due ${fd(b.due)} (${rel(b.due)})`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))),'No open invoices.');
+  h+=sec('Awaiting payment',wait.length,wait.map(b=>row('wait',b.name,b.acc,`Due ${fd(b.due)} (${rel(b.due)})${b.adhoc?' · one-off':''}`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))),'No open invoices.');
   h+=sec('Expected',exp.length,exp.map(x=>row('idle',x.p.name,x.p.acc,`Expected ${fd(x.date)} (${rel(x.date)}) · ${FREQ[x.p.freq].l.toLowerCase()}${x.p.end?' · last invoice '+mlabel(x.p.end,1):''}`,amountFor(x.p,mon),true,btn('rec',x.p.id,'Record invoice')+btn('pedit',x.p.id,'Edit'))),'Nothing else expected this month.');
-  h+=sec('Paid',paid.length,paid.map(b=>row('ok',b.name,b.acc,`Paid ${fd(b.paid)} · was due ${fd(b.due)}`,b.amount,false,btn('bedit',b.id,'Edit'))),'Nothing paid yet.');
+  h+=sec('Paid',paid.length,paid.map(b=>row('ok',b.name,b.acc,`Paid ${fd(b.paid)} · was due ${fd(b.due)}${b.adhoc?' · one-off':''}`,b.amount,false,btn('bedit',b.id,'Edit'))),'Nothing paid yet.');
   if(skip.length)h+=sec('Skipped',skip.length,skip.map(b=>row('idle',b.name,b.acc,'No invoice this month',null,false,btn('unskip',b.id,'Undo'))),'');
   const ended=S.providers.filter(p=>p.end&&p.end<cm&&(view==='all'||p.acc===view));
   if(ended.length)h+=sec('Ended contracts',ended.length,ended.map(p=>row('idle',p.name,p.acc,'Last invoice '+mlabel(p.end),null,false,btn('pedit',p.id,'Edit'))),'');
-  h+=`<div class="bar"><button class="pri" data-act="addp">+ Provider</button>${view!=='all'?'<button class="link" data-act="edita">Rename or delete this account</button>':''}</div>`;
+  h+=`<div class="bar"><button class="pri" data-act="addp">+ Provider</button><button data-act="addo">+ One-off invoice</button>${view!=='all'?'<button class="link" data-act="edita">Rename or delete this account</button>':''}</div>`;
   $('#app').innerHTML=h;
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.id;
-  ({tab:()=>{view=id;render()},adda:addAccount,edita:editAccount,addp:addProvider,rec:()=>record(id),pedit:()=>provForm(prov(id)),pay:()=>pay(id),bedit:()=>editBill(id),
+  ({tab:()=>{view=id;render()},adda:addAccount,edita:editAccount,addp:addProvider,addo:adhoc,rec:()=>record(id),pedit:()=>provForm(prov(id)),pay:()=>pay(id),bedit:()=>editBill(id),
     prev:()=>{mon=shift(mon,-1);render()},next:()=>{mon=shift(mon,1);render()},now:()=>{mon=today().slice(0,7);render()},goto:()=>{mon=id;render()},
     unskip:()=>{S.bills=S.bills.filter(x=>x.id!==id);save();render()},exj:exportJson,exc:exportCsv,imp:importDlg})[b.dataset.act]()});
 $('#cur').addEventListener('change',e=>{S.cur=e.target.value.trim()||'Ft';save();render()});
