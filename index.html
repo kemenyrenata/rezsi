@@ -112,7 +112,7 @@ function openForm(o,onSubmit){
   f.innerHTML=`<h3>${esc(o.title)}</h3>`+o.fields.map(x=>{
     const v=x.value==null?'':x.value;
     if(x.type==='select')return `<label>${esc(x.label)}<select name="${x.key}">${x.options.map(op=>`<option value="${esc(op.v)}"${op.v===v?' selected':''}>${esc(op.l)}</option>`).join('')}</select></label>`;
-    const t=x.type==='int'?'number':x.type||'text',a=x.type==='number'?' step="0.01" min="0" inputmode="decimal"':x.type==='int'?' step="1" min="1" max="31" inputmode="numeric"':'';
+    const t=x.type==='int'?'number':x.type||'text',a=x.type==='number'?' step="0.01"':x.type==='int'?' step="1" min="1" max="31" inputmode="numeric"':'';
     return `<label>${esc(x.label)}<input name="${x.key}" type="${t}" value="${esc(v)}"${a} required></label>`}).join('')
    +`<div class="dbtn"><button type="button" data-x="cancel">Cancel</button>`+(o.extras||[]).map((e,i)=>`<button type="button" class="${e.danger?'danger':''}" data-x="${i}">${esc(e.label)}</button>`).join('')+`<span class="sp"></span><button class="pri" type="submit">${esc(o.submit||'Save')}</button></div>`;
   f.onsubmit=ev=>{ev.preventDefault();const d=new FormData(f),v={};o.fields.forEach(x=>v[x.key]=(d.get(x.key)||'').toString().trim());$('#dlg').close();onSubmit(v);save();render()};
@@ -192,13 +192,13 @@ function adhoc(){if(!S.accounts.length){toast('Create an account first');return}
     {key:'amount',label:'Amount',type:'number',value:''},
     {key:'due',label:'Due date',type:'date',value:dayIn(mon,parseInt(today().slice(8)))},
     {key:'month',label:'Belongs to month',type:'month',value:mon}]},v=>{
-    S.bills.push({id:uid(),pid:null,adhoc:true,name:v.name,acc:v.acc,month:v.month,status:'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:null});mon=v.month})}
+    S.bills.push({id:uid(),pid:null,adhoc:true,name:v.name,acc:v.acc,month:v.month,status:parseFloat(v.amount)<0?'paid':'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:parseFloat(v.amount)<0?today():null});mon=v.month})}
 function record(id){const p=prov(id),m=mon;
   openForm({title:'Invoice received: '+p.name,submit:'Save as awaiting payment',fields:[
     {key:'amount',label:'Actual amount',type:'number',value:amountFor(p,m)},
     {key:'due',label:'Actual due date',type:'date',value:dayIn(m,p.day)}],
     extras:[{label:'Skip '+mlabel(m,1),fn:()=>{S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:'skipped',amount:0,due:dayIn(m,p.day),paid:null})}}]},v=>{
-    S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:null})})}
+    S.bills.push({id:uid(),pid:p.id,name:p.name,acc:p.acc,month:m,status:parseFloat(v.amount)<0?'paid':'awaiting',amount:parseFloat(v.amount)||0,due:v.due,paid:parseFloat(v.amount)<0?today():null})})}
 function pay(id){const b=bill(id);
   openForm({title:'Paid: '+b.name,submit:'Mark as paid',fields:[{key:'paid',label:'Paid on',type:'date',value:today()}]},v=>{b.status='paid';b.paid=v.paid})}
 function editBill(id){const b=bill(id),paid=b.status==='paid';
@@ -206,7 +206,7 @@ function editBill(id){const b=bill(id),paid=b.status==='paid';
   if(paid)fields.push({key:'paid',label:'Paid on',type:'date',value:b.paid});
   const extras=[{label:'Delete',danger:true,fn:()=>{S.bills=S.bills.filter(x=>x.id!==b.id)}}];
   if(paid)extras.unshift({label:'Back to awaiting',fn:()=>{b.status='awaiting';b.paid=null}});
-  openForm({title:b.name+' · '+mlabel(b.month,1),fields,extras},v=>{b.amount=parseFloat(v.amount)||0;b.due=v.due;b.month=v.month;if(paid)b.paid=v.paid})}
+  openForm({title:b.name+' · '+mlabel(b.month,1),fields,extras},v=>{b.amount=parseFloat(v.amount)||0;b.due=v.due;b.month=v.month;if(paid)b.paid=v.paid;else if(b.amount<0){b.status='paid';b.paid=today()}})}
 
 /* ---------- render ---------- */
 function items(m){const inV=a=>view==='all'||a===view;
@@ -244,7 +244,7 @@ function render(){
   h+=sec('Needs attention',at.length,at,'Nothing missing or overdue.');
   h+=sec('Awaiting payment',wait.length,wait.map(b=>row('wait',b.name,b.acc,`Due ${fd(b.due)} (${rel(b.due)})${b.adhoc?' · one-off':''}`,b.amount,false,btn('pay',b.id,'Mark paid',1)+btn('bedit',b.id,'Edit'))),'No open invoices.');
   h+=sec('Expected',exp.length,exp.map(x=>row('idle',x.p.name,x.p.acc,`Expected ${fd(x.date)} (${rel(x.date)}) · ${FREQ[x.p.freq].l.toLowerCase()}${x.p.end?' · last invoice '+mlabel(x.p.end,1):''}`,amountFor(x.p,mon),true,btn('rec',x.p.id,'Record invoice')+btn('pedit',x.p.id,'Edit'))),'Nothing else expected this month.');
-  h+=sec('Paid',paid.length,paid.map(b=>row('ok',b.name,b.acc,`Paid ${fd(b.paid)} · was due ${fd(b.due)}${b.adhoc?' · one-off':''}`,b.amount,false,btn('bedit',b.id,'Edit'))),'Nothing paid yet.');
+  h+=sec('Paid',paid.length,paid.map(b=>row('ok',b.name,b.acc,`Paid ${fd(b.paid)} · was due ${fd(b.due)}${b.adhoc?' · one-off':''}${b.amount<0?' · credit':''}`,b.amount,false,btn('bedit',b.id,'Edit'))),'Nothing paid yet.');
   if(skip.length)h+=sec('Skipped',skip.length,skip.map(b=>row('idle',b.name,b.acc,'No invoice this month',null,false,btn('unskip',b.id,'Undo'))),'');
   const ended=S.providers.filter(p=>p.end&&p.end<cm&&(view==='all'||p.acc===view));
   if(ended.length)h+=sec('Ended contracts',ended.length,ended.map(p=>row('idle',p.name,p.acc,'Last invoice '+mlabel(p.end),null,false,btn('pedit',p.id,'Edit'))),'');
