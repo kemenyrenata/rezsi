@@ -120,16 +120,37 @@ function openForm(o,onSubmit){
   $('#dlg').showModal();
 }
 function showText(title,text){const f=$('#frm');
-  f.innerHTML=`<h3>${esc(title)}</h3><label>Downloads aren’t available here. Select all, copy this text and keep it somewhere safe.<textarea rows="8" readonly>${esc(text)}</textarea></label><div class="dbtn"><span class="sp"></span><button type="button" class="pri" data-x="cancel">Close</button></div>`;
+  f.innerHTML=`<h3>${esc(title)}</h3><label>Downloading isn’t available here. Select all, copy this text and keep it somewhere safe.<textarea rows="8" readonly>${esc(text)}</textarea></label><div class="dbtn"><span class="sp"></span><button type="button" class="pri" data-x="cancel">Close</button></div>`;
   f.onsubmit=e=>e.preventDefault();f.onclick=closeBtn;$('#dlg').showModal()}
-async function download(filename,text,title){
-  let d=null;try{d=window.claude&&await claude.use('downloads')}catch(e){}
-  if(!d){showText(title,text);return}
-  try{await d.save({filename,data:text})}catch(e){if(e&&(e.code==='unavailable'||e.code==='host_unavailable'))showText(title,text);else toast('Download didn’t complete')}}
+
+/* ---------- export: real file save with folder/name picker where supported ---------- */
+async function saveFile(name,text,mime,desc,title){
+  const blob=new Blob([text],{type:mime});
+  /* 1) File System Access API: native "Save as" dialog with filename + folder choice (Chrome, Edge, Opera) */
+  if(window.showSaveFilePicker){
+    try{
+      const ext=name.slice(name.lastIndexOf('.')+1);
+      const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:desc,accept:{[mime]:['.'+ext]}}]});
+      const w=await h.createWritable();await w.write(blob);await w.close();
+      toast('Saved');return;
+    }catch(err){if(err&&err.name==='AbortError')return}
+  }
+  /* 2) Classic anchor download: saves to the browser's download folder */
+  try{
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+    toast('Saved to your downloads');return;
+  }catch(e){}
+  /* 3) Last resort: show the text to copy manually */
+  showText(title,text);
+}
 const csvc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-function exportJson(){download('overhead-tracker-'+today()+'.json',JSON.stringify({app:'overhead-tracker',version:2,exported:today(),state:S},null,2),'Backup')}
+function exportJson(){const text=JSON.stringify({app:'overhead-tracker',version:2,exported:today(),state:S},null,2);
+  saveFile('overhead-tracker-'+today()+'.json',text,'application/json','JSON backup','Backup')}
 function exportCsv(){const r=[['month','account','provider','status','amount','due date','paid date'],...S.bills.slice().sort((a,b)=>a.month<b.month?-1:a.month>b.month?1:0).map(b=>[b.month,accName(b.acc),b.name,b.status,b.amount,b.due||'',b.paid||''])];
-  download('overhead-bills-'+today()+'.csv','\ufeff'+r.map(x=>x.map(csvc).join(',')).join('\r\n'),'Bills (CSV)')}
+  const text='\ufeff'+r.map(x=>x.map(csvc).join(',')).join('\r\n');
+  saveFile('overhead-bills-'+today()+'.csv',text,'text/csv','CSV file','Bills (CSV)')}
 function importDlg(){const f=$('#frm');
   f.innerHTML=`<h3>Import backup</h3><label>Backup file (.json)<input type="file" id="imf" accept=".json,application/json"></label><label>Or paste the backup text<textarea rows="4" id="imt"></textarea></label><p class="meta">Importing replaces everything currently in the tracker.</p><div class="dbtn"><button type="button" data-x="cancel">Cancel</button><span class="sp"></span><button class="pri" type="submit">Replace with import</button></div>`;
   f.onclick=closeBtn;
